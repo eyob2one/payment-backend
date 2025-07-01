@@ -12,9 +12,10 @@ const app = express();
 
 // Security Middleware
 app.use(helmet());
+// Enable CORS for your frontend domain
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  origin: ['https://techreviewethiopia.kesug.com', 'http://localhost:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
