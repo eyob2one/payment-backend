@@ -1,49 +1,45 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
-const businessController = require('../controllers/businessController');
+// FIXED: Update import path to match actual filename
+const { validatePaymentOrder } = require('../middleware/validationMiddleware');
+
+// Create regular payment order
+router.post(
+  '/create-order', 
+  validatePaymentOrder, 
+  paymentController.createOrder
+);
+
+// Create recurring payment order
+router.post(
+  '/create-mandate-order', 
+  validatePaymentOrder, 
+  paymentController.createMandateOrder
+);
+
+// Apply H5 token
+router.post(
+  '/apply-h5-token',
+  paymentController.applyH5Token
+);
+
+// Verify payment
+router.post(
+  '/verify',
+  paymentController.verifyPayment
+);
 
 // Payment notification handler
-router.post('/notify', async (req, res) => {
-  try {
-    const { outTradeNo, status, transactionId } = req.body;
-    
-    // Extract business ID from outTradeNo
-    const businessId = outTradeNo.split('-')[2];
-    
-    // Update payment status
-    await businessController.updatePaymentStatus({
-      body: {
-        businessId,
-        status: status === 'SUCCESS' ? 'completed' : 'failed',
-        transactionId
-      }
-    }, res);
-    
-    res.status(200).send('OK');
-  } catch (error) {
-    res.status(500).send('Error processing notification');
-  }
-});
+router.post(
+  '/notify',
+  paymentController.handlePaymentNotification
+);
 
-// Payment verification endpoint
-router.get('/verify/:businessId', async (req, res) => {
-  try {
-    const { businessId } = req.params;
-    
-    // Check payment status in database
-    const { data, error } = await supabase
-      .from('businesses')
-      .select('payment_status')
-      .eq('id', businessId)
-      .single();
-
-    if (error) throw error;
-    
-    res.json({ status: data.payment_status || 'pending' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Payment status check
+router.get(
+  '/check-status/:orderId',
+  paymentController.checkPaymentStatus
+);
 
 module.exports = router;

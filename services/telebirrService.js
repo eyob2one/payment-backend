@@ -45,3 +45,15 @@ exports.verifyPayment = async (orderId) => {
   // Simplified verification logic
   return { verified: true };
 };
+
+// Update the generateSignature function
+const generateSignature = (data, privateKey) => {
+  try {
+    const sign = crypto.createSign('RSA-SHA256');
+    sign.update(JSON.stringify(data));
+    return sign.sign(privateKey, 'base64');
+  } catch (error) {
+    console.error('Signature generation error:', error);
+    throw new Error('Failed to generate payment signature');
+  }
+};
