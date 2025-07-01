@@ -1,5 +1,5 @@
 const businessService = require('../services/businessService');
-const paymentService = require('../services/paymentService');
+const telebirrService = require('../services/telebirrService');
 const { validationResult } = require('express-validator');
 
 exports.registerBusiness = async (req, res) => {
@@ -52,9 +52,9 @@ exports.registerBusiness = async (req, res) => {
     let paymentResult;
     
     if (businessData.plan === 'Featured') {
-      paymentResult = await paymentService.createOrder(title, businessData.amount, businessId);
+      paymentResult = await telebirrService.createOrder(title, businessData.amount, businessId);
     } else if (businessData.plan === 'Premium') {
-      paymentResult = await paymentService.createMandateOrder(title, businessData.amount, businessId);
+      paymentResult = await telebirrService.createMandateOrder(title, businessData.amount, businessId);
     }
 
     // Update business with order ID
