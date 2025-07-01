@@ -1,6 +1,8 @@
 const businessService = require('../services/businessService');
 const { validationResult } = require('express-validator');
-const supabase = require('../config/supabase');
+// Add at the top of businessController.js
+const fileService = require('../services/fileService');
+const supabase = fileService.supabase; // Access the Supabase client from fileService
 
 exports.registerBusiness = async (req, res) => {
     try {
