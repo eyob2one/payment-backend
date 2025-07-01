@@ -56,5 +56,7 @@ module.exports = {
 
   // Application Configuration
   port: process.env.PORT || 5000,
-  allowedOrigins: process.env.ALLOWED_ORIGINS?.split(',') || ['*']
+  allowedOrigins: process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['*']
 };

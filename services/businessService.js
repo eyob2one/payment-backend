@@ -23,10 +23,9 @@ exports.registerBusiness = async (businessData) => {
 
     // Insert into Supabase
     const { data, error } = await supabase
-      .from('businesses')
+      .from('business_registrations')
       .insert([businessRecord])
-      .select();
-    
+        
     if (error) throw new Error(error.message);
     
     return {
