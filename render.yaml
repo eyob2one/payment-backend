@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: business-registration-backend
+    runtime: node
+    region: oregon
+    branch: main
+    buildCommand: |
+      npm install
+      npm run build --if-present
+    startCommand: node app.js
+    envVars:
+      # Node.js Configuration
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+      # Telebirr Payment Gateway
+      - key: TELEBIRR_BASE_URL
+        value: https://developerportal.ethiotelebirr.et:38443/apiaccess/payment/gateway
+      - key: TELEBIRR_FABRIC_APP_ID
+        value: c4182ef8-9249-458a-985e-06d191f4d505
+      - key: TELEBIRR_APP_SECRET
+        generateValue: true  # Set actual value in Render Dashboard
+      - key: TELEBIRR_MERCHANT_APP_ID
+        value: 1270036784844802
+      - key: TELEBIRR_MERCHANT_CODE
+        value: 23942
+      - key: TELEBIRR_PRIVATE_KEY
+        generateValue: true  # Paste full key in Render Dashboard
+
+      # Supabase Database
+      - key: SUPABASE_URL
+        generateValue: true
+      - key: SUPABASE_KEY
+        generateValue: true
+
+      # WordPress Integration
+      - key: WORDPRESS_URL
+        value: https://techreviewethiopia.kesug.com
+      - key: WORDPRESS_API_KEY
+        generateValue: true
+
+      # CORS Configuration (Critical for your form!)
+      - key: ALLOWED_ORIGINS
+        value: https://techreviewethiopia.kesug.com,http://localhost:3000
+
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /health
