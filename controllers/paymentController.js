@@ -30,12 +30,13 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ error: 'Amount must be greater than zero' });
     }
     if (amountValue > 1000000) {
-      return res.status(400).json({ error: 'Amount exceeds maximum limit' });
+      return res.status(400).json({ error: 'Amount exceeds maximum limit of 1,000,000 ETB' });
     }
 
     // Generate unique order ID
     const orderId = `ORDER-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
+    // Create payment order
     const result = await telebirrService.createOrder(title, amountValue, orderId);
     
     res.json({
@@ -67,15 +68,17 @@ exports.createMandateOrder = async (req, res) => {
       return res.status(400).json({ error: 'Amount must be greater than zero' });
     }
 
+    // Contract number validation
     if (!ContractNo || typeof ContractNo !== 'string' || ContractNo.length < 5) {
       return res.status(400).json({ 
-        error: 'Valid contract number is required (min 5 characters)'
+        error: 'Valid contract number is required (minimum 5 characters)'
       });
     }
 
     // Generate unique order ID
     const orderId = `MANDATE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     
+    // Create recurring payment order
     const result = await telebirrService.createMandateOrder(
       title, 
       amountValue, 
@@ -94,14 +97,36 @@ exports.createMandateOrder = async (req, res) => {
   }
 };
 
+exports.applyH5Token = async (req, res) => {
+  try {
+    const { authToken } = req.body;
+    
+    // Validate auth token
+    if (!authToken || typeof authToken !== 'string') {
+      return res.status(400).json({ error: 'Valid auth token is required' });
+    }
+
+    const result = await telebirrService.applyH5Token(authToken);
+    
+    res.json({
+      success: true,
+      token: result.token
+    });
+  } catch (error) {
+    handleError(res, error, 'apply H5 token');
+  }
+};
+
 exports.verifyPayment = async (req, res) => {
   try {
     const { orderId } = req.body;
     
+    // Validate order ID
     if (!orderId || typeof orderId !== 'string' || orderId.length < 10) {
       return res.status(400).json({ error: 'Valid order ID is required' });
     }
 
+    // Verify payment with Telebirr
     const verificationResult = await telebirrService.verifyPayment(orderId);
     
     if (!verificationResult.verified) {
@@ -145,7 +170,7 @@ exports.handlePaymentNotification = async (req, res) => {
       });
     }
 
-    // Update business registration status
+    // Update business registration status if payment was successful
     if (paymentNotification.status === 'SUCCESS') {
       try {
         await businessService.updatePaymentStatus(
@@ -159,30 +184,43 @@ exports.handlePaymentNotification = async (req, res) => {
         await businessService.sendConfirmationEmail(result.businessId);
       } catch (updateError) {
         console.error('Error updating business status:', updateError);
-        // Don't fail the notification - we'll retry later
+        // Don't fail the entire notification - log error for manual follow-up
       }
     }
     
+    // Always return success to payment provider
     res.status(200).json({ success: true });
   } catch (error) {
-    handleError(res, error, 'process payment notification');
+    console.error('Payment notification processing error:', error);
+    // Still return success to prevent repeated notifications
+    res.status(200).json({ success: true });
   }
 };
 
-// New endpoint for payment status check
 exports.checkPaymentStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
     
-    if (!orderId || typeof orderId !== 'string') {
+    // Validate order ID
+    if (!orderId || typeof orderId !== 'string' || orderId.length < 10) {
       return res.status(400).json({ error: 'Valid order ID is required' });
     }
 
+    // Check payment status from database
     const status = await businessService.getPaymentStatus(orderId);
     
+    if (!status) {
+      return res.status(404).json({
+        success: false,
+        error: 'Payment record not found'
+      });
+    }
+
     res.json({
       success: true,
-      status
+      status: status.paymentStatus,
+      lastChecked: status.lastChecked,
+      businessId: status.businessId
     });
   } catch (error) {
     handleError(res, error, 'check payment status');
