@@ -1,11 +1,15 @@
-const { createClient } = require('@supabase/supabase-js');
-const config = require('../config/config');
-const telebirrService = require('../services/telebirrService');
-
-const supabase = createClient(config.supabase.url, config.supabase.key);
+const businessService = require('../services/businessService');
+const paymentService = require('../services/paymentService');
+const { validationResult } = require('express-validator');
 
 exports.registerBusiness = async (req, res) => {
   try {
+    // Validate request
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
     // Extract form data
     const businessData = {
       business_name: req.body.business_name,
@@ -19,69 +23,48 @@ exports.registerBusiness = async (req, res) => {
       address: req.body.address,
       services: req.body.services,
       plan: req.body.plan,
-      amount: req.body.amount || 0,
-      payment_status: 'pending'
+      amount: req.body.amount || 0
     };
 
-    // Save to Supabase
-    const { data, error } = await supabase
-      .from('businesses')
-      .insert([businessData])
-      .select();
-
-    if (error) throw new Error(error.message);
-    
-    const businessId = data[0].id;
-
-    // Handle file uploads (simplified - in production, upload to cloud storage)
-    if (req.files) {
-      const logoFile = req.files['logo'] ? req.files['logo'][0] : null;
-      const imageFiles = req.files['images[]'] || [];
-      
-      // In real app, upload to S3/Cloudinary and save URLs
-      const updates = {
-        logo_url: logoFile ? `uploads/${logoFile.filename}` : null,
-        images_url: imageFiles.map(file => `uploads/${file.filename}`)
-      };
-
-      await supabase
-        .from('businesses')
-        .update(updates)
-        .eq('id', businessId);
+    // Set amount based on plan
+    if (businessData.plan === 'Featured') {
+      businessData.amount = 500;
+    } else if (businessData.plan === 'Premium') {
+      businessData.amount = 800;
+    } else {
+      businessData.amount = 0;
     }
 
-    // For free plan, return success
+    // Save business registration
+    const registrationResult = await businessService.registerBusiness(businessData);
+    const businessId = registrationResult.businessId;
+
+    // Handle free plan
     if (businessData.plan === 'Free') {
       return res.json({ 
-        success: true, 
-        businessId,
+        success: true,
         message: "Registration successful! Your business is being processed."
       });
     }
 
-    // For paid plans, initiate payment
-    const amount = businessData.plan === 'Featured' ? 500 : 800;
-    const paymentResult = await telebirrService.createOrder(
-      `Business Registration - ${businessData.business_name}`,
-      amount,
-      businessId
-    );
+    // Handle paid plans
+    const title = `Business Registration - ${businessData.business_name}`;
+    let paymentResult;
+    
+    if (businessData.plan === 'Featured') {
+      paymentResult = await paymentService.createOrder(title, businessData.amount, businessId);
+    } else if (businessData.plan === 'Premium') {
+      paymentResult = await paymentService.createMandateOrder(title, businessData.amount, businessId);
+    }
 
-    // Save payment record
-    await supabase
-      .from('payments')
-      .insert([{
-        business_id: businessId,
-        amount: amount,
-        status: 'pending',
-        payment_url: paymentResult.paymentUrl,
-        order_id: paymentResult.orderId
-      }]);
+    // Update business with order ID
+    await businessService.updateBusinessOrderId(businessId, paymentResult.orderId);
 
     res.json({
       paymentUrl: paymentResult.paymentUrl,
       businessId
     });
+    
   } catch (error) {
     console.error('Business registration error:', error);
     res.status(500).json({ error: error.message });
@@ -92,30 +75,26 @@ exports.updatePaymentStatus = async (req, res) => {
   try {
     const { businessId, status, transactionId } = req.body;
     
-    // Update business payment status
-    const { error } = await supabase
-      .from('businesses')
-      .update({ 
-        payment_status: status,
-        payment_date: new Date(),
-        transaction_id: transactionId
-      })
-      .eq('id', businessId);
-
-    if (error) throw new Error(error.message);
-    
-    // Update payment record
-    await supabase
-      .from('payments')
-      .update({ 
-        status: status,
-        updated_at: new Date()
-      })
-      .eq('business_id', businessId);
+    // Update payment status
+    await businessService.updatePaymentStatus(businessId, status, transactionId);
     
     res.json({ success: true });
   } catch (error) {
     console.error('Payment status update error:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+exports.getPaymentStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Get payment status
+    const status = await businessService.getPaymentStatus(orderId);
+    
+    res.json(status);
+  } catch (error) {
+    console.error('Get payment status error:', error);
     res.status(500).json({ error: error.message });
   }
 };
