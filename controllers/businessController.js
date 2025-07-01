@@ -1,7 +1,10 @@
 const businessService = require('../services/businessService');
 const { validationResult } = require('express-validator');
+// Add at the top of businessController.js
+const fileService = require('../services/fileService');
+const supabase = fileService.supabase; // Access the Supabase client from fileService
 
-exports.createOrder = async (req, res) => {
+exports.registerBusiness = async (req, res) => {
     try {
         // Validate request
         const errors = validationResult(req);
@@ -9,152 +12,142 @@ exports.createOrder = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { title, amount } = req.body;
-        
-        // Validate amount
-        if (!amount || isNaN(amount) || amount <= 0) {
-            return res.status(400).json({ error: 'Invalid amount specified' });
+        // Extract form data
+        const businessData = {
+            name: req.body.business_name,
+            email: req.body.email,
+            phone: req.body.phone,
+            website: req.body.website,
+            category: req.body.category,
+            subcategory: req.body.subcategory,
+            description: req.body.description,
+            location: req.body.location,
+            address: req.body.address,
+            services: req.body.services,
+            plan: req.body.plan,
+            payment_status: req.body.payment_status || 'pending',
+            payment_id: req.body.payment_id || null
+        };
+
+        // Handle file uploads
+        if (req.files) {
+            if (req.files.logo) {
+                businessData.logo_url = await businessService.uploadFile(req.files.logo[0]);
+            }
+            
+            if (req.files.images) {
+                businessData.image_urls = await Promise.all(
+                    req.files.images.map(file => businessService.uploadFile(file))
+                );
+            }
         }
 
-        const result = await telebirrService.createOrder(title, amount);
+        // Save to database
+        const business = await businessService.createBusiness(businessData);
         
-        res.json({
+        // If this is a paid registration, we might need to send to WordPress
+        if (businessData.plan !== 'Free') {
+            await businessService.sendToWordPress(business);
+        }
+
+        res.status(201).json({
             success: true,
-            paymentUrl: result.paymentUrl,
-            orderId: result.orderId
+            businessId: business.id,
+            message: 'Business registration successful'
         });
     } catch (error) {
-        console.error('Error creating order:', error);
+        console.error('Error registering business:', error);
         res.status(500).json({ 
             success: false,
-            error: error.message || 'Failed to create payment order'
+            error: error.message || 'Failed to register business'
         });
     }
 };
 
-exports.createMandateOrder = async (req, res) => {
+exports.getBusiness = async (req, res) => {
     try {
-        // Validate request
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
-        }
-
-        const { title, amount, ContractNo } = req.body;
+        const { id } = req.params;
         
-        // Validate amount
-        if (!amount || isNaN(amount) || amount <= 0) {
-            return res.status(400).json({ error: 'Invalid amount specified' });
-        }
-
-        if (!ContractNo) {
-            return res.status(400).json({ error: 'Contract number is required' });
-        }
-
-        const result = await telebirrService.createMandateOrder(title, amount, ContractNo);
+        const business = await businessService.getBusinessById(id);
         
-        res.json({
-            success: true,
-            paymentUrl: result.paymentUrl,
-            orderId: result.orderId
-        });
-    } catch (error) {
-        console.error('Error creating mandate order:', error);
-        res.status(500).json({ 
-            success: false,
-            error: error.message || 'Failed to create mandate payment order'
-        });
-    }
-};
-
-exports.applyH5Token = async (req, res) => {
-    try {
-        const { authToken } = req.body;
-        
-        if (!authToken) {
-            return res.status(400).json({ error: 'Auth token is required' });
-        }
-
-        const result = await telebirrService.applyH5Token(authToken);
-        
-        res.json({
-            success: true,
-            token: result.token
-        });
-    } catch (error) {
-        console.error('Error applying H5 token:', error);
-        res.status(500).json({ 
-            success: false,
-            error: error.message || 'Failed to apply H5 token'
-        });
-    }
-};
-
-exports.verifyPayment = async (req, res) => {
-    try {
-        const { orderId } = req.body;
-        
-        if (!orderId) {
-            return res.status(400).json({ error: 'Order ID is required' });
-        }
-
-        const verificationResult = await telebirrService.verifyPayment(orderId);
-        
-        if (!verificationResult.verified) {
-            return res.status(400).json({
+        if (!business) {
+            return res.status(404).json({ 
                 success: false,
-                error: verificationResult.message || 'Payment verification failed'
+                error: 'Business not found' 
             });
         }
 
         res.json({
             success: true,
-            verified: true,
-            paymentDetails: verificationResult.paymentDetails
+            business
         });
     } catch (error) {
-        console.error('Error verifying payment:', error);
+        console.error('Error getting business:', error);
         res.status(500).json({ 
             success: false,
-            error: error.message || 'Failed to verify payment'
+            error: error.message || 'Failed to get business details'
         });
     }
 };
 
-exports.handlePaymentNotification = async (req, res) => {
+exports.updateBusiness = async (req, res) => {
     try {
-        const paymentNotification = req.body;
+        const { id } = req.params;
+        const updateData = req.body;
         
-        // Validate notification
-        if (!paymentNotification.orderId || !paymentNotification.status) {
-            return res.status(400).json({ error: 'Invalid payment notification' });
+        // Validate request
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
         }
 
-        // Process payment notification
-        const result = await telebirrService.processPaymentNotification(paymentNotification);
+        const updatedBusiness = await businessService.updateBusiness(id, updateData);
         
-        if (result.success) {
-            // Update business registration status if payment was successful
-            if (paymentNotification.status === 'SUCCESS') {
-                await businessService.updatePaymentStatus(
-                    result.businessId, 
-                    'completed',
-                    paymentNotification.orderId
-                );
-            }
-            
-            return res.status(200).json({ success: true });
-        }
-
-        return res.status(400).json({ 
-            success: false,
-            error: result.error 
+        res.json({
+            success: true,
+            business: updatedBusiness
         });
     } catch (error) {
-        console.error('Error handling payment notification:', error);
+        console.error('Error updating business:', error);
         res.status(500).json({ 
             success: false,
-            error: error.message || 'Failed to process payment notification'
+            error: error.message || 'Failed to update business'
+        });
+    }
+};
+
+exports.updatePaymentStatus = async (req, res) => {
+    try {
+        const { businessId } = req.params;
+        const { status, paymentId } = req.body;
+        
+        if (!status || !paymentId) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Status and payment ID are required' 
+            });
+        }
+
+        const updatedBusiness = await businessService.updatePaymentStatus(
+            businessId, 
+            status, 
+            paymentId
+        );
+        
+        // If payment is completed, send to WordPress
+        if (status === 'completed') {
+            await businessService.sendToWordPress(updatedBusiness);
+        }
+
+        res.json({
+            success: true,
+            business: updatedBusiness
+        });
+    } catch (error) {
+        console.error('Error updating payment status:', error);
+        res.status(500).json({ 
+            success: false,
+            error: error.message || 'Failed to update payment status'
         });
     }
 };
