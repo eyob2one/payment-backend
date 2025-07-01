@@ -9,13 +9,13 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: config.allowedOrigins || '*'
+  origin: config.allowedOrigins
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Supabase Client
-const supabase = createClient(config.supabase.url, config.supabase.key);
+// FIXED: Use the correct config properties
+const supabase = createClient(config.supabaseUrl, config.supabaseKey);
 
 // Test Supabase connection
 supabase
