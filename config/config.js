@@ -43,11 +43,10 @@ module.exports = {
 
   
 
-  // Supabase Configuration
-  supabase: {
-    url: process.env.SUPABASE_URL,
-    key: process.env.SUPABASE_KEY
-  },
+  // Supabase Configuration - FIXED: Use correct variable names
+  supabaseUrl: process.env.SUPABASE_URL,
+  supabaseKey: process.env.SUPABASE_KEY,
+
 
   // WordPress Configuration
   wordpress: {
