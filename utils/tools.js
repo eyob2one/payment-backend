@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const config = require('../config/config');
-const pmlib = require('./sign-util-lib');
+const jsrsasign = require('jsrsasign');
 
 // Fields not participating in signature
 const excludeFields = [
@@ -49,13 +49,10 @@ function signRequestObject(requestObject) {
 }
 
 function signString(text, privateKey) {
-  const sha256withrsa = new pmlib.rs.KJUR.crypto.Signature({
-    alg: "SHA256withRSAandMGF1",
-  });
-  sha256withrsa.init(privateKey);
-  sha256withrsa.updateString(text);
-  const sign = pmlib.rs.hextob64(sha256withrsa.sign());
-  return sign;
+  const sig = new jsrsasign.KJUR.crypto.Signature({alg: "SHA256withRSA"});
+  sig.init(privateKey);
+  sig.updateString(text);
+  return jsrsasign.hextob64(sig.sign());
 }
 
 function createTimeStamp() {
