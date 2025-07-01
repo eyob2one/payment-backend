@@ -2,14 +2,9 @@ services:
   - type: web
     name: business-registration-backend
     runtime: node
-    region: oregon
-    branch: main
-    buildCommand: |
-      npm install
-      npm run build --if-present
-    startCommand: node app.js
+    buildCommand: npm install
+    startCommand: npm start
     envVars:
-      # Node.js Configuration
       - key: NODE_ENV
         value: production
       - key: PORT
